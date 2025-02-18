@@ -19,46 +19,47 @@ class PlaylistSongsService {
     const result = await this._pool.query(query);
 
     if (!result.rows[0].id) {
-      throw new InvariantError('Lagu gagal ditambahkan');
+      throw new InvariantError('Lagu gagal ditambahkan ke playlist');
     }
 
     return result.rows[0].id;
   }
 
   async getPlaylistSongs(playlistId) {
-    // memunculkan detail mengenai playlist yang dipilih
-    const queryPlaylist = {
-      text: `SELECT playlists.id, playlists.name, users.username FROM playlists
-      INNER JOIN users ON playlists.owner = users.id
-      WHERE playlists.id = $1`,
+    const query = {
+      text: `SELECT p.id, p.name, u.username,
+      s.id AS song_id, s.title AS song_title, s.performer AS song_performer FROM playlists p
+      JOIN users u ON p.owner = u.id
+      JOIN playlist_songs ps ON p.id = ps.playlist_id
+      JOIN songs s ON ps.song_id = s.id
+      WHERE p.id = $1`,
       values: [playlistId],
     };
-    const resultPlaylist = await this._pool.query(queryPlaylist);
+    const result = await this._pool.query(query);
 
-    // Memunculkan daftar lagu di dalam detail playlist
-    const querySongs = {
-      text: `SELECT songs.id, songs.title, songs.performer FROM playlist_songs
-      INNER JOIN songs ON playlist_songs.song_id = songs.id
-      WHERE playlistsongs.playlist_id = $1`,
-      values: [playlistId],
-    };
-    const resultSongs = await this._pool.query(querySongs);
-
-    if (!resultPlaylist.rows.length) {
-      throw new NotFoundError('Playlist tidak ditemukan');
+    // JIka tidak ada playlis, kembalikan kosong
+    if (result.rows.length === 0) {
+      return [];
     }
 
-    return {
-      id: resultPlaylist.rows[0].id,
-      name: resultPlaylist.rows[0].name,
-      username: resultPlaylist.rows[0].username,
-      songs: resultSongs.rows
-    };;
+    // Mengelompokkan data berdasarkan playlist
+    const playlist = {
+      id: result.rows[0].id,
+      name: result.rows[0].name,
+      username: result.rows[0].username,
+      songs: result.rows.map((row) => ({
+        id: row.song_id,
+        title: row.song_title,
+        performer: row.song_performer,
+      })),
+    };
+
+    return playlist;
   }
 
   async deletePlaylistSong(playlistId, songId) {
     const query = {
-      text: 'DELETE FROM playlistsongs WHERE playlist_id = $1 AND song_id = $2 RETURNING id',
+      text: 'DELETE FROM playlist_songs WHERE playlist_id = $1 AND song_id = $2 RETURNING id',
       values: [playlistId, songId],
     };
 
@@ -69,16 +70,16 @@ class PlaylistSongsService {
     }
   }
 
-  async verifyPlaylist(playlistId, songId) {
+  async verifySongById(songId) {
     const query = {
-      text: 'SELECT * FROM collaborations WHERE playlist_id = $1 AND song_id = $2',
-      values: [playlistId, songId],
+      text: 'SELECT * FROM songs WHERE id = $1',
+      values: [songId],
     };
 
     const result = await this._pool.query(query);
 
     if (!result.rows.length) {
-      throw new InvariantError('Playlist gagal diverifikasi');
+      throw new NotFoundError('Lagu tidak ditemukan');
     }
   }
 }
