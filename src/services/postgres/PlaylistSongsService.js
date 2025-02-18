@@ -37,7 +37,7 @@ class PlaylistSongsService {
     };
     const result = await this._pool.query(query);
 
-    // JIka tidak ada playlis, kembalikan kosong
+    // JIka tidak ada playlist, kembalikan kosong
     if (result.rows.length === 0) {
       return [];
     }
@@ -81,6 +81,44 @@ class PlaylistSongsService {
     if (!result.rows.length) {
       throw new NotFoundError('Lagu tidak ditemukan');
     }
+  }
+
+  async addPlaylistSongActivity(playlistId, songId, userId, action) {
+    const id = `activity-${ nanoid(16) }`;
+
+    const query = {
+      text: 'INSERT INTO ps_activities VALUES($1, $2, $3, $4, $5) RETURNING id',
+      values: [id, playlistId, songId, userId, action],
+    };
+
+    const result = await this._pool.query(query);
+
+    if (!result.rows[0].id) {
+      throw new InvariantError('Aktivitas playlist gagal ditambahkan');
+    }
+
+    return result.rows[0].id;
+  }
+
+  async getPlaylistActivities(playlistId) {
+    const query = {
+      text: `SELECT u.username, s.title, a.action, a.time FROM ps_activities a
+      JOIN playlists p ON a.playlist_id = p.id
+      JOIN songs s ON a.song_id = s.id
+      JOIN users u ON p.owner = u.id
+      WHERE a.playlist_id = $1
+      ORDER BY a.time ASC`,
+      values: [playlistId],
+    };
+
+    const result = await this._pool.query(query);
+
+    return result.rows.map((row) => ({
+      username: row.username,
+      title: row.title,
+      action: row.action,
+      time: row.time,
+    }));
   }
 }
 

@@ -15,6 +15,7 @@ class CollaborationsHandler {
     const { playlistId, userId } = request.payload;
 
     await this._playlistsService.verifyPlaylistOwner(playlistId, credentialId);
+    await this._collaborationsService.verifyUserById(userId);
     const collaborationId = await this._collaborationsService.addCollaboration(playlistId, userId);
 
     const response = h.response({
